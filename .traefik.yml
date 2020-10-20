@@ -1,0 +1,11 @@
+displayName: Header Rewrite DynamoDB
+type: middleware
+
+import: github.com/danieladams456/traefik-plugin-header-rewrite-dynamodb
+
+summary: "Add or replace header based on lookup from DynamoDB"
+
+# TODO
+testData:
+  SourceHeader: Foo
+  TargetHeader: Bar

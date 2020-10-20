@@ -61,28 +61,17 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 	}, nil
 }
 
-// func (a *Demo) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-// 	for key, value := range a.headers {
-// 		tmpl, err := a.template.Parse(value)
-// 		if err != nil {
-// 			http.Error(rw, err.Error(), http.StatusInternalServerError)
-// 			return
-// 		}
+var testMap = map[string]string{
+	"key1": "val1",
+	"key2": "val2",
+}
 
-// 		writer := &bytes.Buffer{}
-
-// 		err = tmpl.Execute(writer, req)
-// 		if err != nil {
-// 			http.Error(rw, err.Error(), http.StatusInternalServerError)
-// 			return
-// 		}
-
-// 		req.Header.Set(key, writer.String())
-// 	}
-
-// 	a.next.ServeHTTP(rw, req)
-// }
-
-// TODO
 func (a *HeaderRewrite) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	// will only get first value of a header, intended behavior
+	if key := req.Header.Get(a.sourceHeader); key != "" {
+		if val, ok := testMap[key]; ok {
+			req.Header.Set(a.targetHeader, val)
+		}
+	}
+	a.next.ServeHTTP(rw, req)
 }

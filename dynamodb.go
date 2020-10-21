@@ -36,11 +36,8 @@ func get(key string) (string, error) {
 	}
 
 	value, ok := res.Item[valueAttribute]
-	if !ok {
-		return "", errors.New("value attribute not found in item")
-	}
-	if value.S == nil {
-		return "", errors.New("value attribute is not a string")
+	if !ok || value.S == nil {
+		return "", errors.New("item or attribute not found")
 	}
 	return *value.S, nil
 }

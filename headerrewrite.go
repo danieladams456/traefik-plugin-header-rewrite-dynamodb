@@ -38,7 +38,7 @@ type HeaderRewrite struct {
 	tableName      string
 	keyAttribute   string
 	valueAttribute string
-	dynamodb       *dynamodb.DynamoDB
+	dynamodb       *dynamodb.DynamodbRepository
 }
 
 // New creates a HeaderRewrite plugin
@@ -55,14 +55,12 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 	}
 
 	// inject properties so dynamodb package can be easily tested
-	dynamodb := dynamodb.DynamoDB{
+	dynamodb := dynamodb.DynamodbRepository{
 		TableName:      config.TableName,
 		KeyAttribute:   config.KeyAttribute,
 		ValueAttribute: config.ValueAttribute,
 	}
-	if err := dynamodb.InitSdk(); err != nil {
-		return nil, err
-	}
+	dynamodb.InitSdk()
 
 	return &HeaderRewrite{
 		next:           next,

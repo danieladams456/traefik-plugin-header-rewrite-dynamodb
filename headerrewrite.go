@@ -7,8 +7,7 @@ import (
 	"errors"
 	"net/http"
 
-	awsSdkConfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/danieladams456/traefik-plugin-header-rewrite-dynamodb/internal/dynamodb"
 )
 
 // Config the plugin configuration.
@@ -39,7 +38,7 @@ type HeaderRewrite struct {
 	tableName      string
 	keyAttribute   string
 	valueAttribute string
-	dynamodbClient *dynamodb.Client
+	dynamodb       *dynamodb.DynamoDB
 }
 
 // New creates a HeaderRewrite plugin
@@ -55,13 +54,15 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		return nil, errors.New("TableName cannot be empty")
 	}
 
-	// create dynamodb client, later can refactor out into a method
-	// passing plugin config if we need to influence things more than LoadDefaultConfig()
-	cfg, err := awsSdkConfig.LoadDefaultConfig()
-	if err != nil {
-		return nil, errors.New("AWS SDK configuration error, " + err.Error())
+	// inject properties so dynamodb package can be easily tested
+	dynamodb := dynamodb.DynamoDB{
+		TableName:      config.TableName,
+		KeyAttribute:   config.KeyAttribute,
+		ValueAttribute: config.ValueAttribute,
 	}
-	dynamodbClient := dynamodb.NewFromConfig(cfg)
+	if err := dynamodb.InitSdk(); err != nil {
+		return nil, err
+	}
 
 	return &HeaderRewrite{
 		next:           next,
@@ -71,9 +72,7 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		tableName:      config.TableName,
 		keyAttribute:   config.KeyAttribute,
 		valueAttribute: config.ValueAttribute,
-		// TBD if we separate this whole thing out into a dynamodbRepository type
-		// that encapsulates the construction and lookup
-		dynamodbClient: dynamodbClient,
+		dynamodb:       &dynamodb,
 	}, nil
 }
 
@@ -81,7 +80,7 @@ func (a *HeaderRewrite) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// will only get first value of a header, intended behavior
 	if key := req.Header.Get(a.sourceHeader); key != "" {
 
-		val, err := a.lookup(key)
+		val, err := a.dynamodb.Lookup(key)
 		if err != nil {
 			req.Header.Set(a.targetHeader, val)
 		}

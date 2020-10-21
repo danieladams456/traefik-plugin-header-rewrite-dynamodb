@@ -6,6 +6,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsSdkConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 // Config the plugin configuration.
@@ -36,10 +41,12 @@ type HeaderRewrite struct {
 	tableName      string
 	keyAttribute   string
 	valueAttribute string
+	dynamodbClient *dynamodb.Client
 }
 
-// New created a new Demo plugin.
+// New creates a HeaderRewrite plugin
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
+	// validate config
 	if config.SourceHeader == "" {
 		return nil, errors.New("SourceHeader cannot be empty")
 	}
@@ -50,6 +57,14 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		return nil, errors.New("TableName cannot be empty")
 	}
 
+	// create dynamodb client, later can refactor out into a method
+	// passing plugin config if we need to influence things more than LoadDefaultConfig()
+	cfg, err := awsSdkConfig.LoadDefaultConfig()
+	if err != nil {
+		return nil, errors.New("AWS SDK configuration error, " + err.Error())
+	}
+	dynamodbClient := dynamodb.NewFromConfig(cfg)
+
 	return &HeaderRewrite{
 		next:           next,
 		name:           name,
@@ -58,20 +73,39 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		tableName:      config.TableName,
 		keyAttribute:   config.KeyAttribute,
 		valueAttribute: config.ValueAttribute,
+		// TBD if we separate this whole thing out into a dynamodbRepository type
+		// that encapsulates the construction and lookup
+		dynamodbClient: dynamodbClient,
 	}, nil
-}
-
-var testMap = map[string]string{
-	"key1": "val1",
-	"key2": "val2",
 }
 
 func (a *HeaderRewrite) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// will only get first value of a header, intended behavior
 	if key := req.Header.Get(a.sourceHeader); key != "" {
-		if val, ok := testMap[key]; ok {
+
+		val, err := a.lookup(key)
+		if err != nil {
 			req.Header.Set(a.targetHeader, val)
 		}
 	}
 	a.next.ServeHTTP(rw, req)
+}
+
+func (a *HeaderRewrite) lookup(key string) (string, error) {
+	params := &dynamodb.GetItemInput{
+		TableName: aws.String(a.tableName),
+		Key: map[string]*types.AttributeValue{
+			a.keyAttribute: &types.AttributeValue{S: aws.String(key)},
+		},
+	}
+	res, err := a.dynamodbClient.GetItem(context.Background(), params)
+	if err != nil {
+		return "", err
+	}
+
+	value, ok := res.Item[a.valueAttribute]
+	if !ok || value.S == nil {
+		return "", errors.New("item or attribute not found")
+	}
+	return *value.S, nil
 }

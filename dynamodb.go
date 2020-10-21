@@ -17,6 +17,7 @@ const (
 	valueAttribute = "value"
 )
 
+// This function is now implemented in headerrewrite.go as part of the HeaderRewrite type
 func get(key string) (string, error) {
 	cfg, err := config.LoadDefaultConfig()
 	if err != nil {
